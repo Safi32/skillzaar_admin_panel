@@ -7,6 +7,7 @@ import AdminJobApprovalScreen from "./AdminJobApprovalScreen";
 import MapView from "./MapView";
 import RealTimeNotifications from "./RealTimeNotifications";
 import CreateSkilledWorker from "./CreateSkilledWorker";
+import PrivacyPolicy from "./privacy_policy";
 
 // Firebase connection check
 const db = getFirestore(app);
@@ -61,7 +62,7 @@ function App() {
   useEffect(() => {
     fetchJobStats();
     fetchAvailableJobs();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -79,8 +80,8 @@ function App() {
       console.log("All jobs data:", jobs);
 
       // Filter for pending jobs that match worker's skills
-      const pendingJobs = jobs.filter((job) => 
-        job.status === "pending" && 
+      const pendingJobs = jobs.filter((job) =>
+        job.status === "pending" &&
         (!job.assignedWorkerId || job.assignedWorkerId === null)
       );
 
@@ -119,7 +120,7 @@ function App() {
       alert(`Job assigned to ${selectedWorker.name} successfully!`);
       setShowWorkerDetailsModal(false);
       setSelectedWorker(null);
-      
+
       // Refresh available jobs
       await fetchAvailableJobs();
     } catch (error) {
@@ -182,6 +183,13 @@ function App() {
             >
               <span className="sidebar-icon">🗺️</span>
               <span className="sidebar-text">Map View</span>
+            </button>
+            <button
+              className={`sidebar-item ${activeTab === "privacy" ? "active" : ""}`}
+              onClick={() => setActiveTab("privacy")}
+            >
+              <span className="sidebar-icon">🔒</span>
+              <span className="sidebar-text">Privacy Policy</span>
             </button>
           </nav>
         </aside>
@@ -359,6 +367,10 @@ function App() {
           {activeTab === "map" && (
             <MapView />
           )}
+
+          {activeTab === "privacy" && (
+            <PrivacyPolicy />
+          )}
         </main>
       </div>
 
@@ -400,8 +412,8 @@ function App() {
             </button>
             <div className="worker-details-header">
               <div className="worker-profile-section">
-                <img 
-                  src={selectedWorker.profileImage} 
+                <img
+                  src={selectedWorker.profileImage}
                   alt={selectedWorker.name}
                   className="worker-detail-avatar"
                 />
