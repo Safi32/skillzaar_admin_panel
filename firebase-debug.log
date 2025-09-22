@@ -1,0 +1,72 @@
+[debug] [2025-09-22T11:40:23.774Z] ----------------------------------------------------------------------
+[debug] [2025-09-22T11:40:23.780Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\azhar\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init functions
+[debug] [2025-09-22T11:40:23.781Z] CLI Version:   14.17.0
+[debug] [2025-09-22T11:40:23.781Z] Platform:      win32
+[debug] [2025-09-22T11:40:23.781Z] Node Version:  v22.15.0
+[debug] [2025-09-22T11:40:23.782Z] Time:          Mon Sep 22 2025 16:40:23 GMT+0500 (Pakistan Standard Time)
+[debug] [2025-09-22T11:40:23.783Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-09-22T11:40:24.249Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-09-22T11:40:24.250Z] > authorizing via signed-in user (safiullahshahid12@gmail.com)
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  D:\skillzaar_admin_panel\skillzaar_admin_panel
+
+Before we get started, keep in mind:
+
+  * You are initializing within an existing Firebase project directory
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] but for now we'll just set up a default project.
+[info] 
+[debug] [2025-09-22T11:40:29.256Z] Using project from CLI flag: skillzaar-9469c
+[debug] [2025-09-22T11:40:29.263Z] Checked if tokens are valid: false, expires at: 1758539682545
+[debug] [2025-09-22T11:40:29.263Z] Checked if tokens are valid: false, expires at: 1758539682545
+[debug] [2025-09-22T11:40:29.264Z] > refreshing access token with scopes: []
+[debug] [2025-09-22T11:40:29.268Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-09-22T11:40:29.268Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-09-22T11:40:30.108Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-09-22T11:40:30.108Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-09-22T11:40:30.125Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/skillzaar-9469c [none]
+[debug] [2025-09-22T11:40:30.933Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/skillzaar-9469c 200
+[debug] [2025-09-22T11:40:30.933Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/skillzaar-9469c {"projectId":"skillzaar-9469c","projectNumber":"781796858808","displayName":"Skillzaar","name":"projects/skillzaar-9469c","resources":{"hostingSite":"skillzaar-9469c"},"state":"ACTIVE","etag":"1_3681021e-bd4d-4d0a-9cbe-686e8bb8b004"}
+[info] i  Using project skillzaar-9469c (Skillzaar) 
+[info] 
+=== Functions Setup
+[debug] [2025-09-22T11:40:31.588Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-09-22T11:40:31.588Z] > authorizing via signed-in user (safiullahshahid12@gmail.com)
+[debug] [2025-09-22T11:40:31.588Z] [iam] checking project skillzaar-9469c for permissions ["firebase.projects.get"]
+[debug] [2025-09-22T11:40:31.589Z] Checked if tokens are valid: true, expires at: 1758544829109
+[debug] [2025-09-22T11:40:31.589Z] Checked if tokens are valid: true, expires at: 1758544829109
+[debug] [2025-09-22T11:40:31.589Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/skillzaar-9469c:testIamPermissions [none]
+[debug] [2025-09-22T11:40:31.589Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/skillzaar-9469c:testIamPermissions x-goog-quota-user=projects/skillzaar-9469c
+[debug] [2025-09-22T11:40:31.590Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/skillzaar-9469c:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2025-09-22T11:40:33.486Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/skillzaar-9469c:testIamPermissions 200
+[debug] [2025-09-22T11:40:33.487Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/skillzaar-9469c:testIamPermissions {"permissions":["firebase.projects.get"]}
+[info] 
+Detected existing codebase(s): default
+
+[debug] [2025-09-22T11:40:46.483Z] ExitPromptError: User force closed the prompt with SIGINT
+    at Interface.sigint (C:\Users\azhar\AppData\Roaming\npm\node_modules\firebase-tools\node_modules\@inquirer\core\dist\commonjs\lib\create-prompt.js:101:37)
+    at Interface.emit (node:events:518:28)
+    at Interface.emit (node:domain:489:12)
+    at [_ttyWrite] [as _ttyWrite] (node:internal/readline/interface:1128:18)
+    at ReadStream.onkeypress (node:internal/readline/interface:267:20)
+    at ReadStream.emit (node:events:530:35)
+    at ReadStream.emit (node:domain:489:12)
+    at emitKeys (node:internal/readline/utils:370:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+[error] 
+[error] Error: An unexpected error has occurred.
