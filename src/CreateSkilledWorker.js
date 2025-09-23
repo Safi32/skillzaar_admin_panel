@@ -25,6 +25,15 @@ const CreateSkilledWorker = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ visible: true, message, type });
+    window.clearTimeout(showToast._t);
+    showToast._t = window.setTimeout(() => {
+      setToast(prev => ({ ...prev, visible: false }));
+    }, 4000);
+  };
 
   const skillCategories = [
     'Cleaning Services',
@@ -237,7 +246,8 @@ const CreateSkilledWorker = () => {
 
       await addDoc(collection(db, 'SkilledWorkers'), workerData);
       
-      setSuccess('Skilled worker created successfully! Data saved to Firestore. Worker is automatically approved and ready to work.');
+      setSuccess('');
+      showToast('Skilled worker has been created successfully and is ready to work.');
       
       // Reset form
       setFormData({
@@ -267,13 +277,30 @@ const CreateSkilledWorker = () => {
 
   return (
     <div className="create-worker-container">
+      {toast.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 1000,
+            minWidth: '280px',
+            maxWidth: '90vw',
+            background: toast.type === 'success' ? '#0f5132' : '#842029',
+            color: '#ffffff',
+            padding: '12px 16px',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          {toast.message}
+        </div>
+      )}
       <div className="create-worker-header">
         <h2>Create New Skilled Worker</h2>
         <p>Add a new skilled worker to the system</p>
-        <div className="admin-created-notice">
-          <span className="notice-icon">👨‍💼</span>
-          <span className="notice-text">Admin-created workers are automatically approved and ready to work</span>
-        </div>
       </div>
 
       {error && (
@@ -283,12 +310,7 @@ const CreateSkilledWorker = () => {
         </div>
       )}
 
-      {success && (
-        <div className="success-message">
-          <span>✅</span>
-          {success}
-        </div>
-      )}
+      {/* Removed in favor of toast notification */}
 
       <form onSubmit={handleSubmit} className="create-worker-form">
         <div className="form-section">

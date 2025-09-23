@@ -46,6 +46,12 @@ const JobAssignmentModal = ({ user, isOpen, onClose, onJobAssigned }) => {
   const handleJobAssignment = async (jobId) => {
     if (!user || !jobId) return;
 
+    // Check if worker already has a job assigned
+    if (user.jobAssigned || user.assignedJobId) {
+      alert('This worker already has a job assigned! Please select another worker.');
+      return;
+    }
+
     setLoading(true);
     try {
       const db = getFirestore(app);

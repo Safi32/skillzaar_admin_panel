@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, getDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import app from './firebase';
 import { CONFIG } from './config';
  
@@ -150,10 +150,34 @@ const JobDetailsModal = ({ job, isOpen, onClose, onAssign }) => {
           <button className="cancel-btn" onClick={onClose}>
             Close
           </button>
-          <button className="assign-btn" onClick={() => onAssign(job)}>
-                    Assign Job
-                  </button>
-                </div>
+          {job.status === 'assigned' ? (
+            <button 
+              className="complete-btn" 
+              onClick={() => {
+                if (window.confirm('Are you sure you want to mark this job as completed?')) {
+                  // Call completion handler - we'll need to pass this from parent
+                  window.completeJob?.(job.id);
+                  onClose();
+                }
+              }}
+              style={{
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Complete Job
+            </button>
+          ) : (
+            <button className="assign-btn" onClick={() => onAssign(job)}>
+              Assign Job
+            </button>
+          )}
+        </div>
       </div>
             </div>
   );
@@ -203,7 +227,7 @@ const JobAssignmentModal = ({ job, workers, isOpen, onClose, onAssign }) => {
               className="worker-select"
             >
               <option value="">Choose a worker...</option>
-              {workers.map(worker => (
+              {workers.filter(worker => !worker.jobAssigned && !worker.assignedJobId).map(worker => (
                 <option key={worker.id} value={worker.id}>
                   {worker.Name || worker.displayName || worker.name || 'Unknown Worker'} - {worker.categories?.[0] || 'General'}
                 </option>
@@ -324,11 +348,15 @@ const MapComponent = ({ jobs, onJobClick }) => {
     });
     markersRef.current = [];
 
-    // Filter jobs with valid coordinates
+    // Filter jobs with valid coordinates and available status
     const jobsWithCoordinates = jobs.filter(job => {
       return job.Latitude && job.Longitude && 
              typeof job.Latitude === 'number' && 
-             typeof job.Longitude === 'number';
+             typeof job.Longitude === 'number' &&
+             job.status !== 'assigned' &&
+             job.status !== 'completed' &&
+             job.status !== 'cancelled' &&
+             !job.assignedWorkerId;
     });
 
     console.log('🗺️ Creating markers for jobs:', jobsWithCoordinates.length);
@@ -456,6 +484,11 @@ const MapView = () => {
         setIsJobModalOpen(true);
       }
     };
+    
+    // Global function for job completion
+    window.completeJob = (jobId) => {
+      handleJobCompletion(jobId);
+    };
   }, [jobs]);
 
 
@@ -472,7 +505,7 @@ const MapView = () => {
   async function getFcmToken(userId) {
     try {
       const db = getFirestore(app);
-      const docRef = doc(db, "Tokens", userId); // users/{userId}
+      const docRef = doc(db, "Tokens", userId); 
       const docSnap = await getDoc(docRef);
   
       if (docSnap.exists()) {
@@ -498,6 +531,18 @@ const MapView = () => {
       const job = jobs.find(j => j.id === jobId);
       if (!job) {
         alert('Job not found!');
+        return;
+      }
+
+      // Check if job is already assigned
+      if (job.status === 'assigned' || job.assignedWorkerId) {
+        alert('This job has already been assigned to another worker!');
+        return;
+      }
+
+      // Check if worker already has a job assigned
+      if (worker.jobAssigned || worker.assignedJobId) {
+        alert('This worker already has a job assigned! Please select another worker.');
         return;
       }
 
@@ -638,7 +683,6 @@ const MapView = () => {
       // Send push notification with assigned job details to the worker app
       try {
         let fcmToken = worker.fcmToken || worker.pushToken || worker.notificationToken;
-        const projectId = 'skillzaar-bcb0f'; // TODO: replace with your Firebase project ID
         if (!fcmToken) {
           try {
             const workerSnap = await getDoc(doc(db, 'Tokens', workerId));
@@ -739,6 +783,54 @@ console.log("Notification response:", res);
   const handleCloseAssignmentModal = () => {
     setIsAssignmentModalOpen(false);
     setSelectedJobForAssignment(null);
+  };
+
+  // Function to handle job completion
+  const handleJobCompletion = async (jobId) => {
+    try {
+      const db = getFirestore(app);
+      const jobRef = doc(db, 'Job', jobId);
+      
+      // Update job status to completed
+      await updateDoc(jobRef, {
+        status: 'completed',
+        completedAt: new Date()
+      });
+
+      // Find and update the assigned job record
+      const assignedJobsQuery = query(
+        collection(db, 'AssignedJobs'),
+        where('jobId', '==', jobId)
+      );
+      const assignedJobsSnapshot = await getDocs(assignedJobsQuery);
+      
+      if (!assignedJobsSnapshot.empty) {
+        const assignedJobDoc = assignedJobsSnapshot.docs[0];
+        await updateDoc(doc(db, 'AssignedJobs', assignedJobDoc.id), {
+          assignmentStatus: 'completed',
+          completedAt: new Date()
+        });
+
+        // Update worker status
+        const assignedJobData = assignedJobDoc.data();
+        if (assignedJobData.workerId) {
+          const workerRef = doc(db, 'SkilledWorkers', assignedJobData.workerId);
+          await updateDoc(workerRef, {
+            jobAssigned: false,
+            assignedJobId: null,
+            currentJobId: null,
+            jobCompletedAt: new Date()
+          });
+        }
+      }
+
+      console.log('Job marked as completed and removed from map');
+      alert('Job completed successfully! It has been removed from the map.');
+      
+    } catch (error) {
+      console.error('Error completing job:', error);
+      alert('Error completing job. Please try again.');
+    }
   };
 
   const loading = jobsLoading || workersLoading;
