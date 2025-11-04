@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import app from './firebase';
  
 import './App.css';
@@ -12,6 +12,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'assigned', 'all'
 
   useEffect(() => {
     console.log('AdminJobApprovalScreen mounted, fetching jobs...');
@@ -26,7 +27,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
     }, 30000); // 30 seconds
     
     return () => clearInterval(interval);
-  }, []);
+  }, [activeTab]); // Re-fetch when tab changes
 
   // Auto-hide notification after 3 seconds
   useEffect(() => {
@@ -50,12 +51,15 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
       const allJobs = jobsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       console.log('All jobs from Firebase:', allJobs);
       
-      const jobsList = allJobs.filter(job => {
-        console.log(`Job ${job.id} status: "${job.status}" (type: ${typeof job.status})`);
-        console.log(`Job ${job.id} title: "${job.title_en}"`);
-        console.log(`Job ${job.id} full data:`, job);
-        return job.status && job.status.toLowerCase() === 'pending';
-      });
+      // Filter jobs based on active tab
+      let jobsList = [];
+      if (activeTab === 'pending') {
+        jobsList = allJobs.filter(job => job.status && job.status.toLowerCase() === 'pending');
+      } else if (activeTab === 'assigned') {
+        jobsList = allJobs.filter(job => job.status && job.status.toLowerCase() === 'assigned');
+      } else {
+        jobsList = allJobs; // Show all jobs
+      }
       
       console.log('Filtered pending jobs:', jobsList);
       console.log('Setting jobs state with:', jobsList.length, 'jobs');
@@ -149,6 +153,140 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
     setShowJobDetails(true);
   };
 
+  // Function to handle job completion
+  const handleJobCompletion = async (jobId) => {
+    if (!window.confirm('Mark this job as completed?')) return;
+    
+    setActionLoading(prev => ({ ...prev, [jobId]: true }));
+    try {
+      const db = getFirestore(app);
+      const jobRef = doc(db, 'Job', jobId);
+
+      // Update job status to completed
+      await updateDoc(jobRef, {
+        status: 'completed',
+        completedAt: serverTimestamp(),
+        adminAction: 'completed',
+        adminActionAt: serverTimestamp()
+      });
+
+      // Find and update the assigned job record
+      const assignedJobsQuery = query(
+        collection(db, 'AssignedJobs'),
+        where('jobId', '==', jobId)
+      );
+      const assignedJobsSnapshot = await getDocs(assignedJobsQuery);
+      if (!assignedJobsSnapshot.empty) {
+        const assignedJobDoc = assignedJobsSnapshot.docs[0];
+        await updateDoc(doc(db, 'AssignedJobs', assignedJobDoc.id), {
+          assignmentStatus: 'completed',
+          completedAt: serverTimestamp()
+        });
+
+        // Update worker to free them up
+        const assignedJobData = assignedJobDoc.data();
+        if (assignedJobData.workerId) {
+          const workerRef = doc(db, 'SkilledWorkers', assignedJobData.workerId);
+          await updateDoc(workerRef, {
+            jobAssigned: false,
+            assignedJobId: null,
+            currentJobId: null,
+            status: 'available'
+          });
+        }
+      }
+
+      // Remove job from current list
+      setJobs(jobs => jobs.filter(job => job.id !== jobId));
+      
+      setNotification({
+        type: 'success',
+        message: 'Job completed successfully!',
+        action: 'completed'
+      });
+
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error completing job:', error);
+      setNotification({
+        type: 'error',
+        message: `Error completing job: ${error.message}`,
+        action: 'error'
+      });
+    }
+    setActionLoading(prev => ({ ...prev, [jobId]: false }));
+  };
+
+  // Function to handle job cancellation
+  const handleJobCancel = async (jobId) => {
+    if (!window.confirm('Cancel this job and free the worker?')) return;
+    
+    setActionLoading(prev => ({ ...prev, [jobId]: true }));
+    try {
+      const db = getFirestore(app);
+      const jobRef = doc(db, 'Job', jobId);
+
+      // Update job status to cancelled and clear assignment
+      await updateDoc(jobRef, {
+        status: 'cancelled',
+        cancelledAt: serverTimestamp(),
+        assignedWorkerId: null,
+        assignedWorkerName: null,
+        adminAction: 'cancelled',
+        adminActionAt: serverTimestamp()
+      });
+
+      // Find and update the assigned job record
+      const assignedJobsQuery = query(
+        collection(db, 'AssignedJobs'),
+        where('jobId', '==', jobId)
+      );
+      const assignedJobsSnapshot = await getDocs(assignedJobsQuery);
+      if (!assignedJobsSnapshot.empty) {
+        const assignedJobDoc = assignedJobsSnapshot.docs[0];
+        await updateDoc(doc(db, 'AssignedJobs', assignedJobDoc.id), {
+          assignmentStatus: 'cancelled',
+          cancelledAt: serverTimestamp()
+        });
+
+        // Update worker to free them up
+        const assignedJobData = assignedJobDoc.data();
+        if (assignedJobData.workerId) {
+          const workerRef = doc(db, 'SkilledWorkers', assignedJobData.workerId);
+          await updateDoc(workerRef, {
+            jobAssigned: false,
+            assignedJobId: null,
+            currentJobId: null,
+            status: 'available'
+          });
+        }
+      }
+
+      // Remove job from current list
+      setJobs(jobs => jobs.filter(job => job.id !== jobId));
+      
+      setNotification({
+        type: 'success',
+        message: 'Job cancelled and worker set to available.',
+        action: 'cancelled'
+      });
+
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error cancelling job:', error);
+      setNotification({
+        type: 'error',
+        message: `Error cancelling job: ${error.message}`,
+        action: 'error'
+      });
+    }
+    setActionLoading(prev => ({ ...prev, [jobId]: false }));
+  };
+
 
   return (
     <div className="dashboard-container fade-in">
@@ -180,16 +318,16 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
       <header className="dashboard-header">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
-            <h1 className="tab-title">Job Approval Requests</h1>
+            <h1 className="tab-title">Job Management</h1>
             <p className="tab-description">
-              Approve or reject jobs posted by job posters 
+              Manage job requests and assignments
               {jobs.length > 0 && (
                 <span style={{ 
                   color: '#f59e0b', 
                   fontWeight: '600',
                   marginLeft: '8px'
                 }}>
-                  ({jobs.length} pending)
+                  ({jobs.length} {activeTab})
                 </span>
               )}
               {lastRefresh && (
@@ -203,6 +341,63 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </span>
               )}
             </p>
+            
+            {/* Status Legend */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px', 
+              marginTop: '8px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
+                <div style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  borderRadius: '50%', 
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #f59e0b'
+                }}></div>
+                Pending
+              </div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
+                <div style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  borderRadius: '50%', 
+                  backgroundColor: '#fee2e2',
+                  border: '2px solid #dc2626'
+                }}></div>
+                Ongoing
+              </div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
+                <div style={{ 
+                  width: '12px', 
+                  height: '12px', 
+                  borderRadius: '50%', 
+                  backgroundColor: '#d1fae5',
+                  border: '1px solid #10b981'
+                }}></div>
+                Completed
+              </div>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             
@@ -227,6 +422,60 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
               {loading ? 'Refreshing...' : 'Refresh'}
             </button>
           </div>
+        </div>
+        
+        {/* Tab Navigation */}
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px', 
+          marginBottom: '20px',
+          borderBottom: '1px solid #e5e7eb'
+        }}>
+          <button
+            onClick={() => setActiveTab('pending')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: activeTab === 'pending' ? '#3b82f6' : 'transparent',
+              color: activeTab === 'pending' ? 'white' : '#6b7280',
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '14px'
+            }}
+          >
+            📋 Pending Jobs
+          </button>
+          <button
+            onClick={() => setActiveTab('assigned')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: activeTab === 'assigned' ? '#3b82f6' : 'transparent',
+              color: activeTab === 'assigned' ? 'white' : '#6b7280',
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '14px'
+            }}
+          >
+            🔄 Assigned Jobs
+          </button>
+          <button
+            onClick={() => setActiveTab('all')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: activeTab === 'all' ? '#3b82f6' : 'transparent',
+              color: activeTab === 'all' ? 'white' : '#6b7280',
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '14px'
+            }}
+          >
+            📊 All Jobs
+          </button>
         </div>
       </header>
       {loading ? (
@@ -253,7 +502,22 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
         </div>
       ) : (
         jobs.map((job, i) => (
-          <div key={job.id} className="job-approval-card fade-in" style={{ animationDelay: `${0.2 + i * 0.1}s` }}>
+          <div key={job.id} className="job-approval-card fade-in" style={{ 
+            animationDelay: `${0.2 + i * 0.1}s`,
+            background: 
+              job.status === 'assigned' ? '#fef2f2' : // Light red for ongoing jobs
+              job.status === 'pending' ? '#f7fafc' : // Default for pending
+              job.status === 'approved' ? '#f0fdf4' : // Light green for approved
+              job.status === 'completed' ? '#f0fdf4' : // Light green for completed
+              '#f7fafc', // Default
+            boxShadow: 
+              job.status === 'assigned' ? '0 4px 12px rgba(220, 38, 38, 0.15)' : // Red shadow for ongoing
+              '0 2px 8px rgba(60, 60, 60, 0.06)',
+            border: 
+              job.status === 'assigned' ? '2px solid #fecaca' : // Red border for ongoing
+              job.status === 'pending' ? '1px solid #e5e7eb' : // Gray border for pending
+              '1px solid #e5e7eb'
+          }}>
             <div className="job-info">
               <img src={job.image || 'https://via.placeholder.com/80'} alt={job.title_en || 'Job'} className="job-image" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, marginRight: 16 }} />
               <div style={{ flex: 1 }}>
@@ -280,19 +544,51 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                   </div>
                 )}
                 <div className="job-date">📅 Posted on: {job.createdAt ? (job.createdAt.toDate ? new Date(job.createdAt.toDate()).toLocaleString() : new Date(job.createdAt).toLocaleString()) : 'Unknown date'}</div>
-                <div className="job-status" style={{ 
-                  color: '#ff6b35', 
-                  fontWeight: 'bold', 
-                  fontSize: '14px',
+                {/* Dynamic Status Badge with Color Coding */}
+                <div style={{ 
                   marginTop: '8px',
                   display: 'inline-block',
-                  padding: '4px 8px',
-                  backgroundColor: '#fff3cd',
-                  borderRadius: '4px',
-                  border: '1px solid #ffeaa7'
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  backgroundColor: 
+                    job.status === 'pending' ? '#fef3c7' :
+                    job.status === 'approved' ? '#d1fae5' :
+                    job.status === 'assigned' ? '#fee2e2' :
+                    job.status === 'completed' ? '#d1fae5' :
+                    job.status === 'cancelled' ? '#f3f4f6' : '#f3f4f6',
+                  color: 
+                    job.status === 'pending' ? '#92400e' :
+                    job.status === 'approved' ? '#065f46' :
+                    job.status === 'assigned' ? '#dc2626' :
+                    job.status === 'completed' ? '#065f46' :
+                    job.status === 'cancelled' ? '#6b7280' : '#6b7280',
+                  border: 
+                    job.status === 'assigned' ? '2px solid #dc2626' : 'none'
                 }}>
-                  Status: Pending Approval
+                  {job.status === 'pending' ? '⏳ PENDING APPROVAL' :
+                   job.status === 'approved' ? '✅ APPROVED' :
+                   job.status === 'assigned' ? '🔄 ONGOING JOB' :
+                   job.status === 'completed' ? '✅ COMPLETED' :
+                   job.status === 'cancelled' ? '❌ CANCELLED' : 'UNKNOWN'}
                 </div>
+                
+                {/* Show assigned worker info for ongoing jobs */}
+                {job.status === 'assigned' && job.assignedWorkerName && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: '#fef3c7',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: '#92400e',
+                    fontWeight: '500',
+                    border: '1px solid #f59e0b'
+                  }}>
+                    👷 Assigned to: {job.assignedWorkerName}
+                  </div>
+                )}
               </div>
             </div>
             <div className="job-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -315,47 +611,108 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
               >
                 <span role="img" aria-label="view">👁️</span> View Details
               </button>
-              <button 
-                className="approve-btn" 
-                disabled={actionLoading[job.id]} 
-                onClick={() => handleAction(job.id, 'approved')}
-                style={{ 
-                  marginBottom: '0px',
-                  background: actionLoading[job.id] ? '#9ca3af' : '#10b981',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
+              {/* Show different actions based on job status */}
+              {job.status === 'pending' ? (
+                <>
+                  <button 
+                    className="approve-btn" 
+                    disabled={actionLoading[job.id]} 
+                    onClick={() => handleAction(job.id, 'approved')}
+                    style={{ 
+                      marginBottom: '0px',
+                      background: actionLoading[job.id] ? '#9ca3af' : '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span role="img" aria-label="approve">✔️</span> {actionLoading[job.id] ? 'Approving...' : 'Approve'}
+                  </button>
+                  <button 
+                    className="reject-btn" 
+                    disabled={actionLoading[job.id]} 
+                    onClick={() => handleAction(job.id, 'rejected')}
+                    style={{
+                      background: actionLoading[job.id] ? '#9ca3af' : '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span role="img" aria-label="reject">❌</span> {actionLoading[job.id] ? 'Rejecting...' : 'Reject'}
+                  </button>
+                </>
+              ) : job.status === 'assigned' ? (
+                <>
+                  <button 
+                    className="complete-btn" 
+                    disabled={actionLoading[job.id]} 
+                    onClick={() => handleJobCompletion(job.id)}
+                    style={{ 
+                      marginBottom: '0px',
+                      background: actionLoading[job.id] ? '#9ca3af' : '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span role="img" aria-label="complete">✅</span> {actionLoading[job.id] ? 'Completing...' : 'Complete'}
+                  </button>
+                  <button 
+                    className="cancel-btn" 
+                    disabled={actionLoading[job.id]} 
+                    onClick={() => handleJobCancel(job.id)}
+                    style={{
+                      background: actionLoading[job.id] ? '#9ca3af' : '#f59e0b',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span role="img" aria-label="cancel">🚫</span> {actionLoading[job.id] ? 'Cancelling...' : 'Cancel'}
+                  </button>
+                </>
+              ) : (
+                <div style={{
                   padding: '8px 12px',
-                  cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
+                  background: '#f3f4f6',
+                  color: '#6b7280',
+                  borderRadius: '6px',
                   fontSize: '12px',
                   fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <span role="img" aria-label="approve">✔️</span> {actionLoading[job.id] ? 'Approving...' : 'Approve'}
-              </button>
-              <button 
-                className="reject-btn" 
-                disabled={actionLoading[job.id]} 
-                onClick={() => handleAction(job.id, 'rejected')}
-                style={{
-                  background: actionLoading[job.id] ? '#9ca3af' : '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '8px 12px',
-                  cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <span role="img" aria-label="reject">❌</span> {actionLoading[job.id] ? 'Rejecting...' : 'Reject'}
-              </button>
+                  textAlign: 'center'
+                }}>
+                  {job.status?.toUpperCase() || 'UNKNOWN'}
+                </div>
+              )}
             </div>
           </div>
         ))
@@ -494,42 +851,99 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
               >
                 Close
               </button>
-              <button
-                onClick={() => {
-                  setShowJobDetails(false);
-                  handleAction(selectedJob.id, 'approved');
-                }}
-                disabled={actionLoading[selectedJob.id]}
-                style={{
+              
+              {/* Show different actions based on job status */}
+              {selectedJob.status === 'pending' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowJobDetails(false);
+                      handleAction(selectedJob.id, 'approved');
+                    }}
+                    disabled={actionLoading[selectedJob.id]}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      background: actionLoading[selectedJob.id] ? '#9ca3af' : '#10b981',
+                      color: 'white',
+                      cursor: actionLoading[selectedJob.id] ? 'not-allowed' : 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {actionLoading[selectedJob.id] ? 'Approving...' : 'Approve Job'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowJobDetails(false);
+                      handleAction(selectedJob.id, 'rejected');
+                    }}
+                    disabled={actionLoading[selectedJob.id]}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      background: actionLoading[selectedJob.id] ? '#9ca3af' : '#ef4444',
+                      color: 'white',
+                      cursor: actionLoading[selectedJob.id] ? 'not-allowed' : 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {actionLoading[selectedJob.id] ? 'Rejecting...' : 'Reject Job'}
+                  </button>
+                </>
+              ) : selectedJob.status === 'assigned' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowJobDetails(false);
+                      handleJobCompletion(selectedJob.id);
+                    }}
+                    disabled={actionLoading[selectedJob.id]}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      background: actionLoading[selectedJob.id] ? '#9ca3af' : '#10b981',
+                      color: 'white',
+                      cursor: actionLoading[selectedJob.id] ? 'not-allowed' : 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {actionLoading[selectedJob.id] ? 'Completing...' : 'Complete Job'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowJobDetails(false);
+                      handleJobCancel(selectedJob.id);
+                    }}
+                    disabled={actionLoading[selectedJob.id]}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      background: actionLoading[selectedJob.id] ? '#9ca3af' : '#f59e0b',
+                      color: 'white',
+                      cursor: actionLoading[selectedJob.id] ? 'not-allowed' : 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {actionLoading[selectedJob.id] ? 'Cancelling...' : 'Cancel Job'}
+                  </button>
+                </>
+              ) : (
+                <div style={{
                   padding: '10px 20px',
-                  border: 'none',
+                  background: '#f3f4f6',
+                  color: '#6b7280',
                   borderRadius: '6px',
-                  background: actionLoading[selectedJob.id] ? '#9ca3af' : '#10b981',
-                  color: 'white',
-                  cursor: actionLoading[selectedJob.id] ? 'not-allowed' : 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                {actionLoading[selectedJob.id] ? 'Approving...' : 'Approve Job'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowJobDetails(false);
-                  handleAction(selectedJob.id, 'rejected');
-                }}
-                disabled={actionLoading[selectedJob.id]}
-                style={{
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '6px',
-                  background: actionLoading[selectedJob.id] ? '#9ca3af' : '#ef4444',
-                  color: 'white',
-                  cursor: actionLoading[selectedJob.id] ? 'not-allowed' : 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                {actionLoading[selectedJob.id] ? 'Rejecting...' : 'Reject Job'}
-              </button>
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  textAlign: 'center'
+                }}>
+                  Status: {selectedJob.status?.toUpperCase() || 'UNKNOWN'}
+                </div>
+              )}
             </div>
           </div>
         </div>

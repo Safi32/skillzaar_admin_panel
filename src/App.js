@@ -9,7 +9,7 @@ import RealTimeNotifications from "./RealTimeNotifications";
 import CreateSkilledWorker from "./CreateSkilledWorker";
 import PrivacyPolicy from "./privacy_policy";
 
-// Firebase connection check
+
 const db = getFirestore(app);
 getDocs(collection(db, "test"))
   .then((snapshot) => {
@@ -35,7 +35,7 @@ function App() {
   const [workersError, setWorkersError] = useState(null);
   const [selectedMgmtWorker, setSelectedMgmtWorker] = useState(null);
 
-  // Fetch job statistics from Firestore
+  
   const fetchJobStats = async () => {
     try {
       console.log("Fetching job statistics from Firestore...");
@@ -66,7 +66,7 @@ function App() {
   useEffect(() => {
     fetchJobStats();
     fetchAvailableJobs();
-    // Subscribe to SkilledWorkers for management page
+ 
     const db = getFirestore(app);
     const unsub = onSnapshot(
       collection(db, "SkilledWorkers"),

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import app from './firebase';
 
@@ -145,6 +145,29 @@ const CreateSkilledWorker = () => {
         phoneNumber = '+92' + phoneNumber;
       }
 
+      // Check for unique phone number and CNIC
+      const db = getFirestore(app);
+      
+      // Check phone number uniqueness
+      const phoneQuery = query(
+        collection(db, 'SkilledWorkers'),
+        where('phoneNumber', '==', phoneNumber)
+      );
+      const phoneSnapshot = await getDocs(phoneQuery);
+      if (!phoneSnapshot.empty) {
+        throw new Error('This phone number is already registered with another worker');
+      }
+
+      // Check CNIC uniqueness
+      const cnicQuery = query(
+        collection(db, 'SkilledWorkers'),
+        where('cnic', '==', formData.cnic)
+      );
+      const cnicSnapshot = await getDocs(cnicQuery);
+      if (!cnicSnapshot.empty) {
+        throw new Error('This CNIC is already registered with another worker');
+      }
+
       console.log('Creating skilled worker...');
 
       // Upload files to Firebase Storage
@@ -156,7 +179,6 @@ const CreateSkilledWorker = () => {
       ]);
 
       // Save worker data to Firestore
-      const db = getFirestore(app);
       const workerData = {
         // Basic Information
         Name: formData.name,

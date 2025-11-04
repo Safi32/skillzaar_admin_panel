@@ -64,6 +64,15 @@ body {
   gap: 12px;
   transition: all 0.3s ease;
   font-size: 16px;
+  text-decoration: none;
+}
+
+.sidebar-item:link,
+.sidebar-item:visited,
+.sidebar-item:hover,
+.sidebar-item:active {
+  text-decoration: none;
+  color: white;
 }
 
 .sidebar-item:hover {
