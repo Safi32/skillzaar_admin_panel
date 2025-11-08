@@ -52,8 +52,6 @@ const getServiceKey = (job) => {
   if (text.includes("clean")) return "cleaner";
   return "default";
 };
-
-// Create a rounded SVG data URL marker with an emoji inside (module scope)
 const createServiceIcon = (serviceKey, isAssigned) => {
   const emoji = SERVICE_EMOJI[serviceKey] || SERVICE_EMOJI.default;
   const bg = SERVICE_COLOR[serviceKey] || SERVICE_COLOR.default;
@@ -444,27 +442,223 @@ const MapComponent = ({ jobs, workers, onJobClick, onWorkerClick }) => {
   const markersRef = useRef([]);
   const workerMarkersRef = useRef([]);
   const connectionLineRef = useRef(null);
-  // (Service helpers are defined at module scope)
-  // Function to draw a line between two points
+  const directionsServiceRef = useRef(null);
+  const directionsRendererRef = useRef(null);
+
+  // Function to draw a proper route like car pooling apps using DirectionsRenderer
   const drawConnectionLine = useCallback(
     (fromPosition, toPosition) => {
+      // Remove any existing connection
       if (connectionLineRef.current) {
         connectionLineRef.current.setMap(null);
+        connectionLineRef.current = null;
       }
 
-      const newLine = new window.google.maps.Polyline({
-        path: [
-          { lat: fromPosition.lat(), lng: fromPosition.lng() },
-          { lat: toPosition.lat(), lng: toPosition.lng() },
-        ],
-        geodesic: true,
-        strokeColor: "#2196F3",
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        map: map,
-      });
+      // Ensure DirectionsService and DirectionsRenderer instances
+      if (
+        !directionsServiceRef.current &&
+        window.google &&
+        window.google.maps
+      ) {
+        directionsServiceRef.current =
+          new window.google.maps.DirectionsService();
+      }
 
-      connectionLineRef.current = newLine;
+      if (
+        !directionsRendererRef.current &&
+        window.google &&
+        window.google.maps
+      ) {
+        directionsRendererRef.current =
+          new window.google.maps.DirectionsRenderer({
+            suppressMarkers: true, // Don't show A/B markers, we have our own job/worker markers
+            polylineOptions: {
+              strokeColor: "#1976D2", // Car pooling app blue color
+              strokeWeight: 8,
+              strokeOpacity: 0.9,
+              geodesic: false,
+            },
+            suppressInfoWindows: true,
+            draggable: false,
+            preserveViewport: true, // Don't auto-fit bounds to route
+          });
+      }
+
+      const origin = { lat: fromPosition.lat(), lng: fromPosition.lng() };
+      const destination = { lat: toPosition.lat(), lng: toPosition.lng() };
+
+      // Request a driving route using DirectionsService
+      if (directionsServiceRef.current && directionsRendererRef.current) {
+        directionsServiceRef.current.route(
+          {
+            origin,
+            destination,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            drivingOptions: {
+              departureTime: new Date(),
+              trafficModel: window.google.maps.TrafficModel.BEST_GUESS,
+            },
+            avoidHighways: false,
+            avoidTolls: false,
+            unitSystem: window.google.maps.UnitSystem.METRIC,
+            region: "PK", // Pakistan region for better local routing
+          },
+          (result, status) => {
+            if (
+              status === window.google.maps.DirectionsStatus.OK ||
+              status === "OK"
+            ) {
+              try {
+                // Get the route path and add connector lines to markers
+                const route = result.routes[0];
+                if (
+                  route &&
+                  route.overview_path &&
+                  route.overview_path.length > 0
+                ) {
+                  // Get the route start and end points
+                  const routeStart = route.overview_path[0];
+                  const routeEnd =
+                    route.overview_path[route.overview_path.length - 1];
+
+                  // Create the main road-following route using DirectionsRenderer
+                  directionsRendererRef.current.setOptions({
+                    suppressMarkers: true,
+                    suppressInfoWindows: true,
+                    draggable: false,
+                    preserveViewport: true,
+                    polylineOptions: {
+                      strokeColor: "#1976D2",
+                      strokeWeight: 6,
+                      strokeOpacity: 0.9,
+                      geodesic: false,
+                    },
+                  });
+
+                  directionsRendererRef.current.setMap(map);
+                  directionsRendererRef.current.setDirections(result);
+
+                  // Create connector lines to attach route to markers
+                  const connectorLines = [];
+
+                  // Line from job marker to route start
+                  const startConnector = new window.google.maps.Polyline({
+                    path: [
+                      origin,
+                      { lat: routeStart.lat(), lng: routeStart.lng() },
+                    ],
+                    strokeColor: "#1976D2",
+                    strokeWeight: 6,
+                    strokeOpacity: 0.9,
+                    geodesic: true,
+                    map: map,
+                  });
+                  connectorLines.push(startConnector);
+
+                  // Line from route end to worker marker
+                  const endConnector = new window.google.maps.Polyline({
+                    path: [
+                      { lat: routeEnd.lat(), lng: routeEnd.lng() },
+                      destination,
+                    ],
+                    strokeColor: "#1976D2",
+                    strokeWeight: 6,
+                    strokeOpacity: 0.9,
+                    geodesic: true,
+                    map: map,
+                  });
+                  connectorLines.push(endConnector);
+
+                  // Add direction arrow on the route
+                  const midPoint = Math.floor(route.overview_path.length / 2);
+                  const arrowMarker = new window.google.maps.Marker({
+                    position: {
+                      lat: route.overview_path[midPoint].lat(),
+                      lng: route.overview_path[midPoint].lng(),
+                    },
+                    map: map,
+                    icon: {
+                      path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                      scale: 4,
+                      strokeColor: "#FFFFFF",
+                      strokeWeight: 1,
+                      fillColor: "#1976D2",
+                      fillOpacity: 1,
+                    },
+                    zIndex: 1000,
+                  });
+                  connectorLines.push(arrowMarker);
+
+                  // Store all elements for cleanup
+                  connectionLineRef.current = {
+                    renderer: directionsRendererRef.current,
+                    connectors: connectorLines,
+                    setMap: function (mapInstance) {
+                      this.renderer.setMap(mapInstance);
+                      this.connectors.forEach((line) => {
+                        if (line.setMap) line.setMap(mapInstance);
+                      });
+                    },
+                  };
+
+                  console.log(
+                    "✅ Connected road route rendered with attachment lines"
+                  );
+                  return;
+                }
+              } catch (e) {
+                console.warn("❌ Error rendering connected route:", e);
+              }
+            } else {
+              console.warn("❌ Directions request failed:", status, result);
+            }
+
+            // Fallback: draw a dashed line if directions service failed
+            const fallbackLine = new window.google.maps.Polyline({
+              path: [origin, destination],
+              geodesic: true,
+              strokeColor: "#FF6B35",
+              strokeOpacity: 0.8,
+              strokeWeight: 4,
+              icons: [
+                {
+                  icon: {
+                    path: "M 0,-1 0,1",
+                    strokeOpacity: 1,
+                    scale: 2,
+                  },
+                  offset: "0",
+                  repeat: "10px",
+                },
+              ],
+              map: map,
+            });
+            connectionLineRef.current = fallbackLine;
+          }
+        );
+      } else {
+        // If DirectionsService isn't available, fallback to dashed line
+        const fallbackLine = new window.google.maps.Polyline({
+          path: [origin, destination],
+          geodesic: true,
+          strokeColor: "#FF6B35",
+          strokeOpacity: 0.8,
+          strokeWeight: 4,
+          icons: [
+            {
+              icon: {
+                path: "M 0,-1 0,1",
+                strokeOpacity: 1,
+                scale: 2,
+              },
+              offset: "0",
+              repeat: "10px",
+            },
+          ],
+          map: map,
+        });
+        connectionLineRef.current = fallbackLine;
+      }
     },
     [map]
   );
@@ -906,6 +1100,41 @@ const MapComponent = ({ jobs, workers, onJobClick, onWorkerClick }) => {
     // We access it directly in the effect to get current job markers
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, workers, onWorkerClick]);
+
+  // Periodically update worker marker positions in-place so moving workers show near real-time locations
+  useEffect(() => {
+    if (!map || !window.google || !window.google.maps) return;
+
+    const intervalMs = 2000; // update every 2 seconds
+    const intervalId = setInterval(() => {
+      try {
+        (workers || []).forEach((worker) => {
+          const lat =
+            worker.currentLocation?.latitude ||
+            worker.currentLatitude ||
+            worker.latitude;
+          const lng =
+            worker.currentLocation?.longitude ||
+            worker.currentLongitude ||
+            worker.longitude;
+
+          if (typeof lat === "number" && typeof lng === "number") {
+            const marker = workerMarkersRef.current.find(
+              (m) => m.workerId === worker.id
+            );
+            if (marker && marker.setPosition) {
+              // Only update position; do not recreate marker to keep open info windows, listeners, etc.
+              marker.setPosition({ lat, lng });
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Error updating worker marker positions:", err);
+      }
+    }, intervalMs);
+
+    return () => clearInterval(intervalId);
+  }, [map, workers]);
 
   return (
     <div className="map-container">
