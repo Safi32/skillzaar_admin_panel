@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "Notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "Notifications",
+      "fieldPath": "read",
+      "indexes": [
+        {"order": "ASCENDING"}
+      ]
+    }
+  ]
+}
