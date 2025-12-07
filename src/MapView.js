@@ -61,9 +61,8 @@ const createServiceIcon = (serviceKey, isAssigned) => {
   const strokeWidth = 2;
   const svg = `
     <svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'>
-      <circle cx='${r}' cy='${r}' r='${
-    r - strokeWidth
-  }' fill='${bg}' stroke='${stroke}' stroke-width='${strokeWidth}' />
+      <circle cx='${r}' cy='${r}' r='${r - strokeWidth
+    }' fill='${bg}' stroke='${stroke}' stroke-width='${strokeWidth}' />
       <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='22' font-family='Segoe UI Emoji,Apple Color Emoji,Segoe UI Symbol,Arial' fill='white'>${emoji}</text>
     </svg>
   `;
@@ -196,9 +195,9 @@ const JobDetailsModal = ({
               </div>
 
               <div className="detail-item">
-                <span className="detail-label">💰 Price:</span>
+                <span className="detail-label">💰 Budget:</span>
                 <span className="detail-value">
-                  {job.currency} {job.price || "N/A"}
+                  Rs. {job.budget || "N/A"}
                 </span>
               </div>
 
@@ -212,10 +211,10 @@ const JobDetailsModal = ({
                 <span className="detail-value">
                   {job.createdAt
                     ? new Date(
-                        job.createdAt.toDate
-                          ? job.createdAt.toDate()
-                          : job.createdAt
-                      ).toLocaleDateString()
+                      job.createdAt.toDate
+                        ? job.createdAt.toDate()
+                        : job.createdAt
+                    ).toLocaleDateString()
                     : "N/A"}
                 </span>
               </div>
@@ -341,7 +340,7 @@ const JobAssignmentModal = ({
               <strong>Location:</strong> {job.Location || job.Address || "N/A"}
             </p>
             <p>
-              <strong>Price:</strong> {job.currency} {job.price || "N/A"}
+              <strong>Budget:</strong> Rs. {job.budget || "N/A"}
             </p>
           </div>
 
@@ -411,9 +410,8 @@ const JobAssignmentModal = ({
                         <p>
                           <strong>Status:</strong>{" "}
                           <span
-                            className={`status-badge ${
-                              selectedWorker.approvalStatus || "pending"
-                            }`}
+                            className={`status-badge ${selectedWorker.approvalStatus || "pending"
+                              }`}
                           >
                             {selectedWorker.approvalStatus || "pending"}
                           </span>
@@ -745,7 +743,7 @@ const MapComponent = ({
   // Create job markers
   useEffect(() => {
     if (!map || !window.google || !window.google.maps) return;
-    
+
     // Clear existing markers
     markersRef.current.forEach((m) => m.setMap && m.setMap(null));
     markersRef.current = [];
@@ -780,37 +778,30 @@ const MapComponent = ({
       const infoWindowContent = `
         <div style="padding: 10px; min-width: 200px;">
           <div style="margin-bottom: 10px;">
-            <h3 style="margin: 0; color: #333; font-size: 16px;">${
-              job.title_en || "Job"
-            }</h3>
-            <p style="margin: 0; color: #666; font-size: 12px;">${
-              job.serviceType || "Service"
-            }</p>
+            <h3 style="margin: 0; color: #333; font-size: 16px;">${job.title_en || "Job"
+        }</h3>
+            <p style="margin: 0; color: #666; font-size: 12px;">${job.serviceType || "Service"
+        }</p>
           </div>
           <div style="margin-bottom: 8px;">
-            <strong>📍 Location:</strong> ${
-              job.Location || job.Address || "N/A"
-            }<br>
-            <strong>💰 Price:</strong> ${job.currency} ${job.price || "N/A"}<br>
+            <strong>📍 Location:</strong> ${job.Location || job.Address || "N/A"
+        }<br>
+            <strong>💰 Budget:</strong> Rs. {job.budget || "N/A"}<br>
             <strong>📱 Phone:</strong> ${job.posterPhone || "N/A"}
           </div>
           <div style="margin: 8px 0;">
-            <span style="display:inline-block;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:600;background:${
-              isAssigned ? "#fee2e2" : "#dcfce7"
-            };color:${isAssigned ? "#b91c1c" : "#166534"};">${
-        isAssigned ? "ONGOING" : "AVAILABLE"
-      }</span>
+            <span style="display:inline-block;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:600;background:${isAssigned ? "#fee2e2" : "#dcfce7"
+        };color:${isAssigned ? "#b91c1c" : "#166534"};">${isAssigned ? "ONGOING" : "AVAILABLE"
+        }</span>
           </div>
           <div style="margin-bottom: 8px;">
             <strong>📝 Description:</strong><br>
-            <span style="color: #666; font-size: 12px;">${
-              job.description_en || "No description"
-            }</span>
+            <span style="color: #666; font-size: 12px;">${job.description_en || "No description"
+        }</span>
           </div>
           <div style="text-align: center; margin-top: 10px;">
-            <button onclick="window.openJobDetails('${
-              job.id
-            }')" style="background: #2196F3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">View Details</button>
+            <button onclick="window.openJobDetails('${job.id
+        }')" style="background: #2196F3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">View Details</button>
           </div>
         </div>
       `;
@@ -840,7 +831,7 @@ const MapComponent = ({
         try {
           const p = m.getPosition();
           if (p) bounds.extend(p);
-        } catch (e) {}
+        } catch (e) { }
       });
       if (newMarkers.length === 1) {
         map.setCenter(newMarkers[0].getPosition());
@@ -1023,40 +1014,34 @@ const MapComponent = ({
       const infoWindowContent = `
         <div style="padding: 10px; min-width: 200px;">
           <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-            ${
-              profilePic
-                ? `
+            ${profilePic
+          ? `
               <img 
                 src="${profilePic}" 
                 alt="${workerName}"
                 style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #2196F3;"
               />
             `
-                : ""
-            }
+          : ""
+        }
             <div>
               <h3 style="margin: 0; color: #333; font-size: 16px; font-weight: 600;">${workerName}</h3>
-              <p style="margin: 2px 0 0 0; color: #666; font-size: 12px;">${
-                worker.categories?.[0] || worker.skills?.[0] || "Skilled Worker"
-              }</p>
+              <p style="margin: 2px 0 0 0; color: #666; font-size: 12px;">${worker.categories?.[0] || worker.skills?.[0] || "Skilled Worker"
+        }</p>
             </div>
           </div>
           <div style="margin-bottom: 8px;">
-            <strong>📍 Location:</strong> ${
-              worker.City || worker.city || worker.currentAddress || "N/A"
-            }<br>
-            <strong>📱 Phone:</strong> ${
-              worker.phoneNumber || worker.phone || "N/A"
-            }<br>
-            ${
-              worker.categories
-                ? `<strong>🛠️ Skills:</strong> ${worker.categories
-                    .slice(0, 3)
-                    .join(", ")}${
-                    worker.categories.length > 3 ? "..." : ""
-                  }<br>`
-                : ""
-            }
+            <strong>📍 Location:</strong> ${worker.City || worker.city || worker.currentAddress || "N/A"
+        }<br>
+            <strong>📱 Phone:</strong> ${worker.phoneNumber || worker.phone || "N/A"
+        }<br>
+            ${worker.categories
+          ? `<strong>🛠️ Skills:</strong> ${worker.categories
+            .slice(0, 3)
+            .join(", ")}${worker.categories.length > 3 ? "..." : ""
+          }<br>`
+          : ""
+        }
           </div>
           <div style="margin: 8px 0;">
             <span style="display:inline-block;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:600;background:#e3f2fd;color:#1976d2;">
@@ -1319,7 +1304,8 @@ const MapView = () => {
           latitude: job.Latitude || null,
           longitude: job.Longitude || null,
         },
-        jobPrice: job.price || 0,
+        budget: job.budget || "0",
+        jobPrice: job.budget || job.price || 0,
         jobCurrency: job.currency || "PKR",
         jobImage: job.Image || null,
         jobCreatedAt: job.createdAt,
@@ -1392,9 +1378,9 @@ const MapView = () => {
             const a =
               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
               Math.cos((jobLat * Math.PI) / 180) *
-                Math.cos((workerLat * Math.PI) / 180) *
-                Math.sin(dLng / 2) *
-                Math.sin(dLng / 2);
+              Math.cos((workerLat * Math.PI) / 180) *
+              Math.sin(dLng / 2) *
+              Math.sin(dLng / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             const distance = R * c;
             return Math.round(distance * 100) / 100; // Round to 2 decimal places
@@ -1524,13 +1510,12 @@ const MapView = () => {
           await updateDoc(doc(db, "AssignedJobs", docRef.id), {
             notifySent: false,
           });
-        } catch {}
+        } catch { }
       }
 
       console.log("Job assigned successfully! Assignment ID:", docRef.id);
       alert(
-        `Job assigned to ${
-          worker.Name || worker.displayName || worker.name
+        `Job assigned to ${worker.Name || worker.displayName || worker.name
         }! Assignment saved to AssignedJobs collection.`
       );
     } catch (error) {

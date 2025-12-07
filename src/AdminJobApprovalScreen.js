@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import app from './firebase';
- 
+
 import './App.css';
 
 function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
@@ -19,13 +19,13 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
     console.log('Firebase app:', app);
     console.log('Firebase app name:', app.name);
     fetchJobs();
-    
+
     // Set up auto-refresh every 30 seconds to get real-time updates
     const interval = setInterval(() => {
       console.log('Auto-refreshing jobs...');
       fetchJobs();
     }, 30000); // 30 seconds
-    
+
     return () => clearInterval(interval);
   }, [activeTab]); // Re-fetch when tab changes
 
@@ -44,13 +44,13 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
     try {
       const db = getFirestore(app);
       console.log('Fetching jobs from collection: Job');
-      
+
       const jobsSnapshot = await getDocs(collection(db, 'Job'));
       console.log('Total documents in Job collection:', jobsSnapshot.docs.length);
-      
+
       const allJobs = jobsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       console.log('All jobs from Firebase:', allJobs);
-      
+
       // Filter jobs based on active tab
       let jobsList = [];
       if (activeTab === 'pending') {
@@ -60,10 +60,10 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
       } else {
         jobsList = allJobs; // Show all jobs
       }
-      
+
       console.log('Filtered pending jobs:', jobsList);
       console.log('Setting jobs state with:', jobsList.length, 'jobs');
-      
+
       // Debug: Check if Electrician job is found
       const electricianJob = allJobs.find(job => job.title_en === 'Electrician');
       if (electricianJob) {
@@ -71,10 +71,10 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
       } else {
         console.log('❌ Electrician job not found in allJobs');
       }
-      
+
       setJobs(jobsList);
       setLastRefresh(new Date());
-      
+
       // Show notification if no jobs found
       if (jobsList.length === 0 && allJobs.length > 0) {
         setNotification({
@@ -98,10 +98,10 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
 
   const handleAction = async (jobId, action) => {
     // Show confirmation dialog
-    const confirmMessage = action === 'approved' 
+    const confirmMessage = action === 'approved'
       ? 'Are you sure you want to approve this job?'
       : 'Are you sure you want to reject this job?';
-    
+
     if (!window.confirm(confirmMessage)) {
       return;
     }
@@ -110,14 +110,14 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
     try {
       const db = getFirestore(app);
       const jobRef = doc(db, 'Job', jobId);
-      
+
       // Update the job status in Firestore
       await updateDoc(jobRef, {
         status: action,
         adminActionAt: serverTimestamp(),
         adminAction: action === 'approved' ? 'approved' : 'rejected',
-        adminId: 'admin', 
-        adminName: 'Admin User'  
+        adminId: 'admin',
+        adminName: 'Admin User'
       });
 
       if (onJobAction) {
@@ -125,7 +125,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
       }
 
       setJobs(jobs => jobs.filter(job => job.id !== jobId));
-      
+
       if (onRefresh) {
         onRefresh();
       }
@@ -136,7 +136,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
         message: `Job ${action} successfully!`,
         action: action
       });
-      
+
     } catch (error) {
       console.error('Error handling job action:', error);
       setNotification({
@@ -156,7 +156,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
   // Function to handle job completion
   const handleJobCompletion = async (jobId) => {
     if (!window.confirm('Mark this job as completed?')) return;
-    
+
     setActionLoading(prev => ({ ...prev, [jobId]: true }));
     try {
       const db = getFirestore(app);
@@ -198,7 +198,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
 
       // Remove job from current list
       setJobs(jobs => jobs.filter(job => job.id !== jobId));
-      
+
       setNotification({
         type: 'success',
         message: 'Job completed successfully!',
@@ -222,7 +222,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
   // Function to handle job cancellation
   const handleJobCancel = async (jobId) => {
     if (!window.confirm('Cancel this job and free the worker?')) return;
-    
+
     setActionLoading(prev => ({ ...prev, [jobId]: true }));
     try {
       const db = getFirestore(app);
@@ -266,7 +266,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
 
       // Remove job from current list
       setJobs(jobs => jobs.filter(job => job.id !== jobId));
-      
+
       setNotification({
         type: 'success',
         message: 'Job cancelled and worker set to available.',
@@ -322,8 +322,8 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
             <p className="tab-description">
               Manage job requests and assignments
               {jobs.length > 0 && (
-                <span style={{ 
-                  color: '#f59e0b', 
+                <span style={{
+                  color: '#f59e0b',
                   fontWeight: '600',
                   marginLeft: '8px'
                 }}>
@@ -331,8 +331,8 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </span>
               )}
               {lastRefresh && (
-                <span style={{ 
-                  color: '#6b7280', 
+                <span style={{
+                  color: '#6b7280',
                   fontSize: '12px',
                   marginLeft: '8px',
                   fontStyle: 'italic'
@@ -341,57 +341,57 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </span>
               )}
             </p>
-            
+
             {/* Status Legend */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '12px', 
+            <div style={{
+              display: 'flex',
+              gap: '12px',
               marginTop: '8px',
               flexWrap: 'wrap'
             }}>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
                 gap: '4px',
                 fontSize: '12px',
                 color: '#6b7280'
               }}>
-                <div style={{ 
-                  width: '12px', 
-                  height: '12px', 
-                  borderRadius: '50%', 
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
                   backgroundColor: '#fef3c7',
                   border: '1px solid #f59e0b'
                 }}></div>
                 Pending
               </div>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
                 gap: '4px',
                 fontSize: '12px',
                 color: '#6b7280'
               }}>
-                <div style={{ 
-                  width: '12px', 
-                  height: '12px', 
-                  borderRadius: '50%', 
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
                   backgroundColor: '#fee2e2',
                   border: '2px solid #dc2626'
                 }}></div>
                 Ongoing
               </div>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
                 gap: '4px',
                 fontSize: '12px',
                 color: '#6b7280'
               }}>
-                <div style={{ 
-                  width: '12px', 
-                  height: '12px', 
-                  borderRadius: '50%', 
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
                   backgroundColor: '#d1fae5',
                   border: '1px solid #10b981'
                 }}></div>
@@ -400,8 +400,8 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            
-            <button 
+
+            <button
               onClick={fetchJobs}
               disabled={loading}
               style={{
@@ -423,11 +423,11 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
             </button>
           </div>
         </div>
-        
+
         {/* Tab Navigation */}
-        <div style={{ 
-          display: 'flex', 
-          gap: '8px', 
+        <div style={{
+          display: 'flex',
+          gap: '8px',
           marginBottom: '20px',
           borderBottom: '1px solid #e5e7eb'
         }}>
@@ -488,11 +488,11 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
           <div style={{ fontSize: '24px', color: '#6b7280', marginBottom: '8px' }}>🎉</div>
           <div style={{ fontSize: '18px', color: '#6b7280', marginBottom: '8px' }}>No jobs pending approval!</div>
           <div style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '16px' }}>All job requests have been processed</div>
-          <div style={{ 
-            fontSize: '12px', 
-            color: '#9ca3af', 
-            padding: '12px', 
-            backgroundColor: '#f9fafb', 
+          <div style={{
+            fontSize: '12px',
+            color: '#9ca3af',
+            padding: '12px',
+            backgroundColor: '#f9fafb',
             borderRadius: '8px',
             border: '1px solid #e5e7eb',
             display: 'inline-block'
@@ -502,21 +502,21 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
         </div>
       ) : (
         jobs.map((job, i) => (
-          <div key={job.id} className="job-approval-card fade-in" style={{ 
+          <div key={job.id} className="job-approval-card fade-in" style={{
             animationDelay: `${0.2 + i * 0.1}s`,
-            background: 
+            background:
               job.status === 'assigned' ? '#fef2f2' : // Light red for ongoing jobs
-              job.status === 'pending' ? '#f7fafc' : // Default for pending
-              job.status === 'approved' ? '#f0fdf4' : // Light green for approved
-              job.status === 'completed' ? '#f0fdf4' : // Light green for completed
-              '#f7fafc', // Default
-            boxShadow: 
+                job.status === 'pending' ? '#f7fafc' : // Default for pending
+                  job.status === 'approved' ? '#f0fdf4' : // Light green for approved
+                    job.status === 'completed' ? '#f0fdf4' : // Light green for completed
+                      '#f7fafc', // Default
+            boxShadow:
               job.status === 'assigned' ? '0 4px 12px rgba(220, 38, 38, 0.15)' : // Red shadow for ongoing
-              '0 2px 8px rgba(60, 60, 60, 0.06)',
-            border: 
+                '0 2px 8px rgba(60, 60, 60, 0.06)',
+            border:
               job.status === 'assigned' ? '2px solid #fecaca' : // Red border for ongoing
-              job.status === 'pending' ? '1px solid #e5e7eb' : // Gray border for pending
-              '1px solid #e5e7eb'
+                job.status === 'pending' ? '1px solid #e5e7eb' : // Gray border for pending
+                  '1px solid #e5e7eb'
           }}>
             <div className="job-info">
               <img src={job.image || 'https://via.placeholder.com/80'} alt={job.title_en || 'Job'} className="job-image" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, marginRight: 16 }} />
@@ -525,18 +525,19 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 <div className="job-poster">📱 Phone: {job.posterPhone || 'No phone'}</div>
                 <div className="job-poster">🆔 Poster ID: {job.jobPosterId || 'Unknown'}</div>
                 <div className="job-location">📍 Location: {job.location || 'No location'}</div>
-                <div className="job-description" style={{ 
-                  maxHeight: '60px', 
-                  overflow: 'hidden', 
+                <div className="job-budget">💰 Budget: Rs. {job.budget || 'Not specified'}</div>
+                <div className="job-description" style={{
+                  maxHeight: '60px',
+                  overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   marginBottom: '8px'
                 }}>
                   {job.description_en || 'No description'}
                 </div>
                 {job.description_ur && (
-                  <div className="job-description-ur" style={{ 
-                    maxHeight: '40px', 
-                    overflow: 'hidden', 
+                  <div className="job-description-ur" style={{
+                    maxHeight: '40px',
+                    overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     marginBottom: '8px'
                   }}>
@@ -545,35 +546,35 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 )}
                 <div className="job-date">📅 Posted on: {job.createdAt ? (job.createdAt.toDate ? new Date(job.createdAt.toDate()).toLocaleString() : new Date(job.createdAt).toLocaleString()) : 'Unknown date'}</div>
                 {/* Dynamic Status Badge with Color Coding */}
-                <div style={{ 
+                <div style={{
                   marginTop: '8px',
                   display: 'inline-block',
                   padding: '6px 12px',
                   borderRadius: '20px',
                   fontSize: '12px',
                   fontWeight: '600',
-                  backgroundColor: 
+                  backgroundColor:
                     job.status === 'pending' ? '#fef3c7' :
-                    job.status === 'approved' ? '#d1fae5' :
-                    job.status === 'assigned' ? '#fee2e2' :
-                    job.status === 'completed' ? '#d1fae5' :
-                    job.status === 'cancelled' ? '#f3f4f6' : '#f3f4f6',
-                  color: 
+                      job.status === 'approved' ? '#d1fae5' :
+                        job.status === 'assigned' ? '#fee2e2' :
+                          job.status === 'completed' ? '#d1fae5' :
+                            job.status === 'cancelled' ? '#f3f4f6' : '#f3f4f6',
+                  color:
                     job.status === 'pending' ? '#92400e' :
-                    job.status === 'approved' ? '#065f46' :
-                    job.status === 'assigned' ? '#dc2626' :
-                    job.status === 'completed' ? '#065f46' :
-                    job.status === 'cancelled' ? '#6b7280' : '#6b7280',
-                  border: 
+                      job.status === 'approved' ? '#065f46' :
+                        job.status === 'assigned' ? '#dc2626' :
+                          job.status === 'completed' ? '#065f46' :
+                            job.status === 'cancelled' ? '#6b7280' : '#6b7280',
+                  border:
                     job.status === 'assigned' ? '2px solid #dc2626' : 'none'
                 }}>
                   {job.status === 'pending' ? '⏳ PENDING APPROVAL' :
-                   job.status === 'approved' ? '✅ APPROVED' :
-                   job.status === 'assigned' ? '🔄 ONGOING JOB' :
-                   job.status === 'completed' ? '✅ COMPLETED' :
-                   job.status === 'cancelled' ? '❌ CANCELLED' : 'UNKNOWN'}
+                    job.status === 'approved' ? '✅ APPROVED' :
+                      job.status === 'assigned' ? '🔄 ONGOING JOB' :
+                        job.status === 'completed' ? '✅ COMPLETED' :
+                          job.status === 'cancelled' ? '❌ CANCELLED' : 'UNKNOWN'}
                 </div>
-                
+
                 {/* Show assigned worker info for ongoing jobs */}
                 {job.status === 'assigned' && job.assignedWorkerName && (
                   <div style={{
@@ -592,8 +593,8 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
               </div>
             </div>
             <div className="job-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button 
-                className="view-details-btn" 
+              <button
+                className="view-details-btn"
                 onClick={() => handleViewDetails(job)}
                 style={{
                   background: '#6b7280',
@@ -614,11 +615,11 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
               {/* Show different actions based on job status */}
               {job.status === 'pending' ? (
                 <>
-                  <button 
-                    className="approve-btn" 
-                    disabled={actionLoading[job.id]} 
+                  <button
+                    className="approve-btn"
+                    disabled={actionLoading[job.id]}
                     onClick={() => handleAction(job.id, 'approved')}
-                    style={{ 
+                    style={{
                       marginBottom: '0px',
                       background: actionLoading[job.id] ? '#9ca3af' : '#10b981',
                       color: 'white',
@@ -635,9 +636,9 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                   >
                     <span role="img" aria-label="approve">✔️</span> {actionLoading[job.id] ? 'Approving...' : 'Approve'}
                   </button>
-                  <button 
-                    className="reject-btn" 
-                    disabled={actionLoading[job.id]} 
+                  <button
+                    className="reject-btn"
+                    disabled={actionLoading[job.id]}
                     onClick={() => handleAction(job.id, 'rejected')}
                     style={{
                       background: actionLoading[job.id] ? '#9ca3af' : '#ef4444',
@@ -658,11 +659,11 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </>
               ) : job.status === 'assigned' ? (
                 <>
-                  <button 
-                    className="complete-btn" 
-                    disabled={actionLoading[job.id]} 
+                  <button
+                    className="complete-btn"
+                    disabled={actionLoading[job.id]}
                     onClick={() => handleJobCompletion(job.id)}
-                    style={{ 
+                    style={{
                       marginBottom: '0px',
                       background: actionLoading[job.id] ? '#9ca3af' : '#10b981',
                       color: 'white',
@@ -679,9 +680,9 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                   >
                     <span role="img" aria-label="complete">✅</span> {actionLoading[job.id] ? 'Completing...' : 'Complete'}
                   </button>
-                  <button 
-                    className="cancel-btn" 
-                    disabled={actionLoading[job.id]} 
+                  <button
+                    className="cancel-btn"
+                    disabled={actionLoading[job.id]}
                     onClick={() => handleJobCancel(job.id)}
                     style={{
                       background: actionLoading[job.id] ? '#9ca3af' : '#f59e0b',
@@ -758,22 +759,22 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
             >
               &times;
             </button>
-            
+
             <h2 style={{ marginBottom: '20px', color: '#1f2937' }}>
               Job Details
             </h2>
-            
+
             <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-              <img 
-                src={selectedJob.image || 'https://via.placeholder.com/150'} 
-                alt={selectedJob.title_en || 'Job'} 
-                style={{ 
-                  width: 150, 
-                  height: 150, 
-                  objectFit: 'cover', 
+              <img
+                src={selectedJob.image || 'https://via.placeholder.com/150'}
+                alt={selectedJob.title_en || 'Job'}
+                style={{
+                  width: 150,
+                  height: 150,
+                  objectFit: 'cover',
                   borderRadius: '8px',
                   border: '1px solid #e5e7eb'
-                }} 
+                }}
               />
               <div style={{ flex: 1 }}>
                 <h3 style={{ marginBottom: '8px', color: '#1f2937' }}>
@@ -791,7 +792,10 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 <div style={{ marginBottom: '8px' }}>
                   <strong>📅 Posted on:</strong> {selectedJob.createdAt ? new Date(selectedJob.createdAt.toDate()).toLocaleString() : 'Unknown date'}
                 </div>
-                <div style={{ 
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>💰 Budget:</strong> Rs. {selectedJob.budget || 'Not specified'}
+                </div>
+                <div style={{
                   display: 'inline-block',
                   padding: '4px 8px',
                   backgroundColor: '#fff3cd',
@@ -805,12 +809,12 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </div>
               </div>
             </div>
-            
+
             <div style={{ marginBottom: '20px' }}>
               <h4 style={{ marginBottom: '8px', color: '#1f2937' }}>Description (English):</h4>
-              <p style={{ 
-                padding: '12px', 
-                backgroundColor: '#f9fafb', 
+              <p style={{
+                padding: '12px',
+                backgroundColor: '#f9fafb',
                 borderRadius: '6px',
                 border: '1px solid #e5e7eb',
                 lineHeight: '1.5'
@@ -818,13 +822,13 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 {selectedJob.description_en || 'No description available'}
               </p>
             </div>
-            
+
             {selectedJob.description_ur && (
               <div style={{ marginBottom: '20px' }}>
                 <h4 style={{ marginBottom: '8px', color: '#1f2937' }}>Description (Urdu):</h4>
-                <p style={{ 
-                  padding: '12px', 
-                  backgroundColor: '#f9fafb', 
+                <p style={{
+                  padding: '12px',
+                  backgroundColor: '#f9fafb',
                   borderRadius: '6px',
                   border: '1px solid #e5e7eb',
                   lineHeight: '1.5',
@@ -835,7 +839,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </p>
               </div>
             )}
-            
+
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setShowJobDetails(false)}
@@ -851,7 +855,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
               >
                 Close
               </button>
-              
+
               {/* Show different actions based on job status */}
               {selectedJob.status === 'pending' ? (
                 <>
