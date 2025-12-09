@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import app from './firebase';
 
 import './App.css';
@@ -12,7 +12,13 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showJobDetails, setShowJobDetails] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'assigned', 'all'
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'assigned', 'all', 'job_payment'
+  const [paymentRequests, setPaymentRequests] = useState({}); // Map of jobId -> paymentDoc
+  
+  // Payment Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentJob, setPaymentJob] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
 
   useEffect(() => {
     console.log('AdminJobApprovalScreen mounted, fetching jobs...');
@@ -49,7 +55,20 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
       console.log('Total documents in Job collection:', jobsSnapshot.docs.length);
 
       const allJobs = jobsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log('All jobs from Firebase:', allJobs);
+
+      // Fetch active payment requests if on job_payment tab
+      let paymentDocsMap = {};
+      if (activeTab === 'job_payment') {
+        const paymentsQuery = query(collection(db, 'JobPayments'), where('status', '==', 'pending_admin_approval'));
+        const paymentsSnapshot = await getDocs(paymentsQuery);
+        paymentsSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.jobId) {
+             paymentDocsMap[data.jobId] = { id: doc.id, ...data };
+          }
+        });
+        setPaymentRequests(paymentDocsMap);
+      }
 
       // Filter jobs based on active tab
       let jobsList = [];
@@ -57,6 +76,10 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
         jobsList = allJobs.filter(job => job.status && job.status.toLowerCase() === 'pending');
       } else if (activeTab === 'assigned') {
         jobsList = allJobs.filter(job => job.status && job.status.toLowerCase() === 'assigned');
+      } else if (activeTab === 'job_payment') {
+        // Show jobs that have a pending payment request OR are completed (legacy support)
+        // Preferring those with payment requests
+        jobsList = allJobs.filter(job => paymentDocsMap[job.id] || (job.status && job.status.toLowerCase() === 'completed'));
       } else {
         jobsList = allJobs; // Show all jobs
       }
@@ -288,6 +311,113 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
   };
 
 
+  const openPaymentModal = (job) => {
+    setPaymentJob(job);
+    // Use requested amount if available, else budget
+    const requestedAmount = paymentRequests[job.id]?.amount;
+    const initialAmount = (requestedAmount && requestedAmount !== "0") ? requestedAmount : (job.budget || '');
+    setPaymentAmount(initialAmount);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!paymentAmount || !paymentAmount.toString().trim()) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    
+    const amount = paymentAmount;
+    const job = paymentJob;
+    
+    setShowPaymentModal(false); // Close immediately or wait? Better close to show loading on card? 
+    // Actually keep logic similar but use state vars
+    
+    setActionLoading(prev => ({ ...prev, [job.id]: true }));
+    try {
+      const db = getFirestore(app);
+      const jobRef = doc(db, 'Job', job.id);
+
+      await updateDoc(jobRef, {
+        paymentStatus: 'approved',
+        paymentAmount: amount,
+        price: amount, 
+        budget: amount,
+        paymentApprovedAt: serverTimestamp(),
+        adminPaymentAction: 'approved'
+      });
+
+      // Update JobPayments collection
+      // Check if we already have a fetched ID for this request
+      const existingPaymentDoc = paymentRequests[job.id];
+      
+      if (existingPaymentDoc) {
+         // Update existing request found in fetchJobs
+         await updateDoc(doc(db, 'JobPayments', existingPaymentDoc.id), {
+          amount: amount,
+          status: 'approved',
+          adminApprovedAt: serverTimestamp(),
+          adminId: 'admin'
+        });
+      } else {
+        // Fallback to query
+        const jobPaymentsQuery = query(
+            collection(db, 'JobPayments'),
+            where('jobId', '==', job.id)
+        );
+        const jobPaymentsSnapshot = await getDocs(jobPaymentsQuery);
+
+        if (!jobPaymentsSnapshot.empty) {
+            const paymentDoc = jobPaymentsSnapshot.docs[0];
+            await updateDoc(doc(db, 'JobPayments', paymentDoc.id), {
+            amount: amount,
+            status: 'approved',
+            adminApprovedAt: serverTimestamp(),
+            adminId: 'admin'
+            });
+        } else {
+             await addDoc(collection(db, 'JobPayments'), {
+              jobId: job.id,
+              amount: amount,
+              status: 'approved',
+              assignedJobId: job.assignedJobId || null,
+              jobTitle: job.title_en || job.title,
+              posterId: job.jobPosterId || null,
+              workerId: job.assignedWorkerId || null,
+              approvedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              type: 'admin_created'
+            });
+        }
+      }
+
+      setNotification({
+        type: 'success',
+        message: `Payment of Rs. ${amount} assigned and approved!`,
+        action: 'payment_approved'
+      });
+
+      setJobs(jobs => jobs.map(j => 
+        j.id === job.id 
+          ? { ...j, paymentStatus: 'approved', paymentAmount: amount, budget: amount, price: amount }
+          : j
+      ));
+
+    } catch (error) {
+      console.error('Error assigning payment:', error);
+      setNotification({
+        type: 'error',
+        message: `Error assigning payment: ${error.message}`,
+        action: 'error'
+      });
+    }
+    setActionLoading(prev => ({ ...prev, [job.id]: false }));
+    setPaymentJob(null);
+    setPaymentAmount('');
+  };
+
+
+
+
   return (
     <div className="dashboard-container fade-in">
       {/* Notification */}
@@ -462,6 +592,21 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
             🔄 Assigned Jobs
           </button>
           <button
+            onClick={() => setActiveTab('job_payment')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              background: activeTab === 'job_payment' ? '#3b82f6' : 'transparent',
+              color: activeTab === 'job_payment' ? 'white' : '#6b7280',
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '14px'
+            }}
+          >
+            💳 Job Payment
+          </button>
+          <button
             onClick={() => setActiveTab('all')}
             style={{
               padding: '8px 16px',
@@ -525,7 +670,11 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 <div className="job-poster">📱 Phone: {job.posterPhone || 'No phone'}</div>
                 <div className="job-poster">🆔 Poster ID: {job.jobPosterId || 'Unknown'}</div>
                 <div className="job-location">📍 Location: {job.location || 'No location'}</div>
-                <div className="job-budget">💰 Budget: Rs. {job.budget || 'Not specified'}</div>
+                {/* Show budget only in Job Payment tab if needed, or if user allows. User said remove budget from here, so assuming main views. I'll add it back for this specific tab if it makes context. */ }
+                {activeTab === 'job_payment' && (
+                  <div className="job-budget">💰 Budget: Rs. {job.budget || 'Not specified'}</div>
+                )}
+
                 <div className="job-description" style={{
                   maxHeight: '60px',
                   overflow: 'hidden',
@@ -592,7 +741,49 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 )}
               </div>
             </div>
-            <div className="job-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="job-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              
+              {/* Special Payment Button for Job Payment Tab */}
+              {activeTab === 'job_payment' && (
+                  <>
+                   {job.paymentStatus === 'approved' ? (
+                    <div style={{
+                      padding: '8px 12px',
+                      background: '#ecfdf5',
+                      color: '#059669',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      textAlign: 'center',
+                      border: '1px solid #10b981'
+                    }}>
+                      💰 Paid: Rs. {job.paymentAmount}
+                    </div>
+                   ) : (
+                    <button
+                      className="payment-btn"
+                      disabled={actionLoading[job.id]}
+                      onClick={() => openPaymentModal(job)}
+                      style={{
+                        background: actionLoading[job.id] ? '#9ca3af' : '#8b5cf6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '8px 12px',
+                        cursor: actionLoading[job.id] ? 'not-allowed' : 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <span role="img" aria-label="payment">💳</span> {actionLoading[job.id] ? 'Processing...' : 'Assign Payment'}
+                    </button>
+                   )}
+                  </>
+              )}
+
               <button
                 className="view-details-btn"
                 onClick={() => handleViewDetails(job)}
@@ -680,6 +871,7 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                   >
                     <span role="img" aria-label="complete">✅</span> {actionLoading[job.id] ? 'Completing...' : 'Complete'}
                   </button>
+
                   <button
                     className="cancel-btn"
                     disabled={actionLoading[job.id]}
@@ -700,6 +892,25 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                   >
                     <span role="img" aria-label="cancel">🚫</span> {actionLoading[job.id] ? 'Cancelling...' : 'Cancel'}
                   </button>
+                </>
+              ) : job.status === 'completed' ? (
+                <>
+                   {job.paymentStatus === 'approved' ? (
+                    <div style={{
+                      padding: '8px 12px',
+                      background: '#ecfdf5',
+                      color: '#059669',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      textAlign: 'center',
+                      border: '1px solid #10b981'
+                    }}>
+                      💰 Paid: Rs. {job.paymentAmount}
+                    </div>
+                   ) : (
+                    null
+                   )}
                 </>
               ) : (
                 <div style={{
@@ -949,6 +1160,100 @@ function AdminJobApprovalScreen({ onJobAction, onRefresh }) {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Payment Modal */}
+      {showPaymentModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100,
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            width: '90%',
+            maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            transform: 'scale(1)',
+            animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          }}>
+             <h3 style={{ marginTop: 0, marginBottom: '8px', color: '#1f2937', fontSize: '20px' }}>Assign Payment</h3>
+             <p style={{ color: '#6b7280', marginBottom: '24px', fontSize: '14px' }}>
+               Enter the approved amount for <strong>{paymentJob?.title_en}</strong>.
+             </p>
+
+             <div style={{ marginBottom: '24px' }}>
+               <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                 Payment Amount (Rs)
+               </label>
+               <input 
+                 type="number"
+                 value={paymentAmount}
+                 onChange={(e) => setPaymentAmount(e.target.value)}
+                 autoFocus
+                 placeholder="e.g. 5000"
+                 style={{
+                   width: '100%',
+                   padding: '12px 16px',
+                   borderRadius: '8px',
+                   border: '2px solid #e5e7eb',
+                   fontSize: '16px',
+                   outline: 'none',
+                   transition: 'border-color 0.2s'
+                 }}
+                 onFocus={(e) => e.target.style.borderColor = '#8b5cf6'}
+                 onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+               />
+             </div>
+
+             <div style={{ display: 'flex', gap: '12px' }}>
+               <button
+                 onClick={() => setShowPaymentModal(false)}
+                 style={{
+                   flex: 1,
+                   padding: '12px',
+                   borderRadius: '8px',
+                   border: '1px solid #d1d5db',
+                   background: 'white',
+                   color: '#374151',
+                   fontSize: '14px',
+                   fontWeight: '600',
+                   cursor: 'pointer'
+                 }}
+               >
+                 Cancel
+               </button>
+               <button
+                 onClick={handlePaymentSubmit}
+                 style={{
+                   flex: 1,
+                   padding: '12px',
+                   borderRadius: '8px',
+                   border: 'none',
+                   background: '#8b5cf6',
+                   color: 'white',
+                   fontSize: '14px',
+                   fontWeight: '600',
+                   cursor: 'pointer',
+                   boxShadow: '0 4px 6px -1px rgba(139, 92, 246, 0.5)'
+                 }}
+               >
+                 Confirm Payment
+               </button>
+             </div>
           </div>
         </div>
       )}
