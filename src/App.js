@@ -64,11 +64,14 @@ function App() {
 
 
   useEffect(() => {
+    // Initial fetch for backward compatibility / first paint
     fetchJobStats();
     fetchAvailableJobs();
- 
+
     const db = getFirestore(app);
-    const unsub = onSnapshot(
+
+    // Real-time listener for workers
+    const unsubWorkers = onSnapshot(
       collection(db, "SkilledWorkers"),
       (snap) => {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -83,7 +86,30 @@ function App() {
         setWorkersLoading(false);
       }
     );
-    return () => unsub();
+
+    // Real-time listener for jobs to keep dashboard stats in sync
+    const unsubJobs = onSnapshot(
+      collection(db, "Job"),
+      (snap) => {
+        const jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        const stats = {
+          total: jobs.length,
+          pending: jobs.filter((job) => job.status === "pending").length,
+          approved: jobs.filter((job) => job.status === "approved").length,
+        };
+
+        setJobStats(stats);
+      },
+      (err) => {
+        console.error("Error loading jobs for stats:", err);
+      }
+    );
+
+    return () => {
+      unsubWorkers();
+      unsubJobs();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

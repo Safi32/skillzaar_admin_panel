@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunkskillzaar_admin_panel=self.webpackChunkskillzaar_admin_panel||[]).push([[133],{133:(a,n,e)=>{e.r(n),e.d(n,{default:()=>r});var l=e(65),s=e(579);const r=function(){return(0,s.jsx)(l.A,{})}}}]);
+//# sourceMappingURL=133.08460ad3.chunk.js.map

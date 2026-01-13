@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import app from './firebase';
 
@@ -7,6 +7,7 @@ const CreateSkilledWorker = () => {
   const [formData, setFormData] = useState({
     name: '',
     phoneNumber: '',
+    password: '',
     cnic: '',
     age: '',
     city: '',
@@ -78,9 +79,6 @@ const CreateSkilledWorker = () => {
     }));
   };
 
-
-
-
   const handleCategoryChange = (e) => {
     const { value, checked } = e.target;
     if (checked) {
@@ -95,7 +93,6 @@ const CreateSkilledWorker = () => {
       }));
     }
   };
-
 
   const uploadFile = async (file, path) => {
     if (!file) return null;
@@ -121,7 +118,7 @@ const CreateSkilledWorker = () => {
 
     try {
       // Validate required fields
-      if (!formData.name || !formData.phoneNumber || !formData.cnic || 
+      if (!formData.name || !formData.phoneNumber || !formData.password || !formData.cnic || 
           !formData.age || !formData.city || !formData.workingRadius ||
           formData.categories.length === 0) {
         throw new Error('Please fill in all required fields and select at least one service category');
@@ -129,6 +126,11 @@ const CreateSkilledWorker = () => {
 
       if (!files.profilePicture || !files.cnicFront || !files.cnicBack) {
         throw new Error('Please upload all required files');
+      }
+
+      // Validate password (basic)
+      if (formData.password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
       }
 
       // Validate phone number format
@@ -145,30 +147,10 @@ const CreateSkilledWorker = () => {
         phoneNumber = '+92' + phoneNumber;
       }
 
-      // Check for unique phone number and CNIC
-      const db = getFirestore(app);
-      
-      // Check phone number uniqueness
-      const phoneQuery = query(
-        collection(db, 'SkilledWorkers'),
-        where('phoneNumber', '==', phoneNumber)
-      );
-      const phoneSnapshot = await getDocs(phoneQuery);
-      if (!phoneSnapshot.empty) {
-        throw new Error('This phone number is already registered with another worker');
-      }
-
-      // Check CNIC uniqueness
-      const cnicQuery = query(
-        collection(db, 'SkilledWorkers'),
-        where('cnic', '==', formData.cnic)
-      );
-      const cnicSnapshot = await getDocs(cnicQuery);
-      if (!cnicSnapshot.empty) {
-        throw new Error('This CNIC is already registered with another worker');
-      }
-
       console.log('Creating skilled worker...');
+
+      const db = getFirestore(app);
+      const skilledWorkersCollection = collection(db, 'SkilledWorkers');
 
       // Upload files to Firebase Storage
       const timestamp = Date.now();
@@ -202,13 +184,13 @@ const CreateSkilledWorker = () => {
         displayName: formData.name,
         description: formData.description || 'Skilled worker',
         rate: formData.rate || '0',
+        password: formData.password,
         
         // Skills and Categories
         categories: formData.categories,
         skills: formData.categories,
         
         // System Information
-        skilledWorkerId: `skilled_worker_${phoneNumber.replace(/[^0-9]/g, '')}_${timestamp}`,
         userType: 'admin_created',
         isActive: true,
         isOnline: false,
@@ -266,7 +248,11 @@ const CreateSkilledWorker = () => {
         locationUpdatedAt: null
       };
 
-      await addDoc(collection(db, 'SkilledWorkers'), workerData);
+      const docRef = await addDoc(skilledWorkersCollection, workerData);
+
+      await updateDoc(docRef, {
+        skilledWorkerId: docRef.id
+      });
       
       setSuccess('');
       showToast('Skilled worker has been created successfully and is ready to work.');
@@ -275,6 +261,7 @@ const CreateSkilledWorker = () => {
       setFormData({
         name: '',
         phoneNumber: '',
+        password: '',
         cnic: '',
         age: '',
         city: '',
@@ -366,6 +353,21 @@ const CreateSkilledWorker = () => {
             </div>
           </div>
 
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="password">Password *</label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                value={formData.password}
+                onChange={handleInputChange}
+                required
+                placeholder="Enter a password for worker"
+                minLength="6"
+              />
+            </div>
+          </div>
 
           <div className="form-row">
             <div className="form-group">

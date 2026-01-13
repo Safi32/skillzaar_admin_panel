@@ -1,0 +1,1 @@
+{"version":3,"file":"static/js/133.08460ad3.chunk.js","mappings":"+KAMA,QAJA,WACE,OAAOA,EAAAA,EAAAA,KAACC,EAAAA,EAAO,GACjB,C","sources":["pages/Map.js"],"sourcesContent":["import MapView from \"../MapView\";\n\nfunction MapPage() {\n  return <MapView />;\n}\n\nexport default MapPage;\n\n\n"],"names":["_jsx","MapView"],"sourceRoot":""}

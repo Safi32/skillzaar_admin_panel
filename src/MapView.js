@@ -312,10 +312,6 @@ const JobAssignmentModal = ({
   const handleWorkerChange = (e) => {
     const workerId = e.target.value;
     setSelectedWorkerId(workerId);
-
-    if (workerId && onPreviewRoute && job) {
-      onPreviewRoute(job.id, workerId);
-    }
   };
 
   if (!isOpen || !job) return null;
@@ -362,6 +358,16 @@ const JobAssignmentModal = ({
                 </option>
               ))}
             </select>
+            {onPreviewRoute && selectedWorkerId && (
+              <button
+                type="button"
+                className="assign-btn"
+                style={{ marginTop: 8 }}
+                onClick={() => onPreviewRoute(job.id, selectedWorkerId)}
+              >
+                Preview Route on Map
+              </button>
+            )}
           </div>
 
           {selectedWorkerId && (
@@ -464,6 +470,7 @@ const MapComponent = ({
   const connectionLineRef = useRef(null);
   const directionsServiceRef = useRef(null);
   const directionsRendererRef = useRef(null);
+  const hasInitialFitRef = useRef(false);
 
   // Function to draw a proper route like car pooling apps using DirectionsRenderer
   const drawConnectionLine = useCallback(
@@ -824,8 +831,8 @@ const MapComponent = ({
 
     markersRef.current = newMarkers;
 
-    // Auto-centering
-    if (newMarkers.length > 0) {
+    // Auto-centering (only once on initial load)
+    if (!hasInitialFitRef.current && newMarkers.length > 0) {
       const bounds = new window.google.maps.LatLngBounds();
       newMarkers.forEach((m) => {
         try {
@@ -847,6 +854,7 @@ const MapComponent = ({
           }
         );
       }
+      hasInitialFitRef.current = true;
     }
 
     return () => {
@@ -996,20 +1004,6 @@ const MapComponent = ({
         position,
       });
 
-      // Add hover event for workers to draw route once; do not clear on mouseout so route stays visible
-      marker.addListener("mouseover", () => {
-        // Find any jobs assigned to this worker
-        const assignedJobs = jobs.filter(
-          (job) => job.assignedWorkerId === worker.id
-        );
-        assignedJobs.forEach((job) => {
-          const jobMarker = markersRef.current.find((m) => m.jobId === job.id);
-          if (jobMarker) {
-            drawConnectionLine(marker.getPosition(), jobMarker.getPosition());
-          }
-        });
-      });
-
       // Create info window content with worker picture and name
       const infoWindowContent = `
         <div style="padding: 10px; min-width: 200px;">
@@ -1084,9 +1078,9 @@ const MapComponent = ({
 
     workerMarkersRef.current = newWorkerMarkers;
 
-    // Auto-center map on all markers (jobs + workers) if we have any
+    // Auto-center map on all markers (jobs + workers) only once on initial load
     const allMarkers = [...(markersRef.current || []), ...newWorkerMarkers];
-    if (allMarkers.length > 0) {
+    if (!hasInitialFitRef.current && allMarkers.length > 0) {
       // Use a timeout to ensure markers are fully rendered
       setTimeout(() => {
         const bounds = new window.google.maps.LatLngBounds();
@@ -1115,6 +1109,8 @@ const MapComponent = ({
             }
           );
         }
+
+        hasInitialFitRef.current = true;
       }, 100);
     }
 
@@ -1154,6 +1150,11 @@ const MapComponent = ({
             if (marker && marker.setPosition) {
               // Only update position; do not recreate marker to keep open info windows, listeners, etc.
               marker.setPosition({ lat, lng });
+              console.log("[MapView] Updated worker marker position", {
+                id: worker.id,
+                lat,
+                lng,
+              });
             }
           }
         });
